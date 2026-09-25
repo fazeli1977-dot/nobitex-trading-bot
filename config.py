@@ -1,6 +1,6 @@
 """
 Configuration Management Module
-Central settings for Nobitex Trading Bot
+Central settings for Nobitex Trading Bot - Iranian Rial (TOMAN/IRR)
 """
 
 import os
@@ -28,14 +28,26 @@ DRY_RUN = os.getenv("DRY_RUN", "true").strip().lower() == "true"
 LIVE_TRADING = os.getenv("LIVE_TRADING", "false").strip().lower() == "true"
 MARGIN_ENABLED = os.getenv("MARGIN_ENABLED", "false").strip().lower() == "true"
 
-# Multi-symbol runtime config
+# Quote currency: IRR (ریال ایران) or USDT
+QUOTE_CURRENCY = os.getenv("QUOTE_CURRENCY", "IRR").upper()
+
+# Multi-symbol runtime config - Persian pairs (BTC/IRR, ETH/IRR, etc.)
 TRADING_SYMBOLS = [
     s.strip().upper().replace("/", "")
-    for s in os.getenv("TRADING_SYMBOLS", "BTCUSDT,ETHUSDT").split(",")
+    for s in os.getenv("TRADING_SYMBOLS", "BTCIRR,ETHIRR").split(",")
     if s and s.strip()
 ]
 SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "60"))
 DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "8000"))
+
+# ============================================================================
+# CURRENCY CONVERSION SETTINGS
+# ============================================================================
+# Conversion rate: 1 USDT ≈ 42,000 - 50,000 IRR (تومان)
+# Update this based on current market rates
+USDT_TO_IRR_RATE = float(os.getenv("USDT_TO_IRR_RATE", "42000"))
+USE_TOMAN = os.getenv("USE_TOMAN", "false").strip().lower() == "true"  # Use 1/10 of IRR value
+TOMAN_RATE = USDT_TO_IRR_RATE / 10 if USE_TOMAN else USDT_TO_IRR_RATE
 
 # ============================================================================
 # TRADING & RISK MANAGEMENT PARAMETERS
@@ -43,11 +55,13 @@ DASHBOARD_PORT = int(os.getenv("DASHBOARD_PORT", "8000"))
 
 @dataclass
 class RiskConfig:
-    """Risk management configuration"""
+    """Risk management configuration - IRR-based"""
     MAX_CONCURRENT_POSITIONS: int = 6
     MAX_POSITION_SIZE_PERCENT: float = 5.0
-    MIN_POSITION_SIZE_USDT: float = 50.0
-    MAX_POSITION_SIZE_USDT: float = 5000.0
+    # Minimum position: 500,000 تومان (~$12 USD) instead of $50 USDT
+    MIN_POSITION_SIZE_IRR: float = 500000.0
+    # Maximum position: 50,000,000 تومان (~$1,200 USD) instead of $5,000 USDT
+    MAX_POSITION_SIZE_IRR: float = 50000000.0
     LEVERAGE: int = 2
     ATR_MULTIPLIER_SL: float = 2.0
     ATR_MULTIPLIER_TP: float = 3.0
@@ -57,9 +71,10 @@ class RiskConfig:
     MAKER_FEE_PERCENT: float = 0.1
     TAKER_FEE_PERCENT: float = 0.15
     MARGIN_EXTENSION_FEE_PERCENT: float = 0.025
-    MIN_VOLUME_24H_USDT: float = 100000.0
+    # Minimum 24h volume: 2 Billion تومان
+    MIN_VOLUME_24H_IRR: float = 2000000000.0
     MAX_SPREAD_BPS: float = 50.0
-    MIN_LIQUIDITY_DEPTH: float = 10000.0
+    MIN_LIQUIDITY_DEPTH: float = 100000000.0  # 100M تومان
 
 RISK_CONFIG = RiskConfig()
 
@@ -79,7 +94,7 @@ class ScreenerConfig:
     VOLATILITY_RANKING_WEIGHT: float = 0.3
     LIQUIDITY_RANKING_WEIGHT: float = 0.3
     BLACKLIST_DAYS: int = 1
-    QUOTE_CURRENCY: str = "USDT"
+    QUOTE_CURRENCY: str = QUOTE_CURRENCY
 
 SCREENER_CONFIG = ScreenerConfig()
 
@@ -163,16 +178,17 @@ class SystemConfig:
 SYSTEM_CONFIG = SystemConfig()
 
 # ============================================================================
-# TRADING PAIRS WHITELIST
+# TRADING PAIRS WHITELIST (IRR/TOMAN PAIRS)
 # ============================================================================
 WHITELISTED_PAIRS = [
-    f"{symbol[:3]}/{symbol[3:]}" if symbol.endswith("USDT") and len(symbol) > 4 else symbol
+    f"{symbol[:-3]}/{symbol[-3:]}" if symbol.endswith("IRR") and len(symbol) > 3 else symbol
     for symbol in TRADING_SYMBOLS
 ]
 
 # Never trade these pairs
 BLACKLISTED_PAIRS = [
-    "SHIB/USDT",
+    "SHIB/IRR",
+    "DOGE/IRR",
 ]
 
 # ============================================================================
@@ -194,6 +210,10 @@ def validate_config() -> bool:
         errors.append("MAX_CONCURRENT_POSITIONS must be >= 1")
     if RISK_CONFIG.LEVERAGE < 1 or RISK_CONFIG.LEVERAGE > 5:
         errors.append("LEVERAGE must be between 1 and 5")
+    if QUOTE_CURRENCY not in ["IRR", "USDT"]:
+        errors.append("QUOTE_CURRENCY must be 'IRR' or 'USDT'")
+    if USDT_TO_IRR_RATE <= 0:
+        errors.append("USDT_TO_IRR_RATE must be positive")
     if errors:
         print("⚠️  Configuration Errors:")
         for error in errors:
